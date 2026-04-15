@@ -1,11 +1,18 @@
-import { useState, useEffect } from 'react'
+﻿import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { FormField } from '../components/FormField'
 import { SkillsInput } from '../components/SkillsInput'
 import { Card } from '../components/ui/Card'
 import { useAuthStore } from '../store/useAuthStore'
 import { savePreferences } from '../lib/authApi'
-import type { OpportunityType, Preferences, Target, WorkMode } from '../types/auth'
+import type {
+  OpportunityType,
+  Preferences,
+  RewardType,
+  Target,
+  TimeCommitment,
+  WorkMode,
+} from '../types/auth'
 
 type OnboardingPageProps = {
   onComplete: () => void
@@ -13,10 +20,22 @@ type OnboardingPageProps = {
   editing?: boolean
 }
 
-const timeCommitments = ['24 hours', '3 days', '1 week', '2 weeks', '1 month']
+const rewards: RewardType[] = [
+  'certificate',
+  'cash_prize',
+  'internship_offer',
+  'job_offer',
+  'swags',
+  'experience',
+]
 const workModes: WorkMode[] = ['Remote', 'Onsite', 'Hybrid']
-const opportunityTypes: OpportunityType[] = ['hackathon', 'internship', 'job', 'both']
+const timeCommitments: TimeCommitment[] = ['1_day', '1_week', '2_weeks', '1_month', 'long_term']
+const opportunityTypes: OpportunityType[] = ['hackathon', 'internship', 'job']
 const targets: Target[] = ['student', 'job seeker']
+
+const uniqueItems = <T extends string>(items: T[]): T[] => [...new Set(items)]
+
+const joinOrNotSet = (items: string[]): string => (items.length ? items.join(', ') : 'Not set')
 
 export function OnboardingPage({ onComplete, onBack, editing = false }: OnboardingPageProps) {
   const user = useAuthStore((state) => state.user)
@@ -26,30 +45,54 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
   const isEditing = editing || Boolean(preferences)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [form, setForm] = useState<Preferences>(
-    () =>
-      preferences ?? {
-        timeCommitment: '1 week',
-        location: '',
-        workMode: 'Remote',
-        skills: [],
-        college: '',
-        year: '',
-        reward: '',
-        opportunityType: 'both',
-        target: 'student',
-      },
+  const [form, setForm] = useState<Preferences>(() =>
+    preferences ?? {
+      target: 'student',
+      reward: [],
+      college: '',
+      year: '',
+      location: '',
+      workMode: [],
+      timeCommitment: [],
+      opportunityType: [],
+      skills: [],
+    },
   )
 
-  // Sync form with preferences if they change (e.g. loaded from API)
   useEffect(() => {
     if (preferences && !isSubmitting) {
       setForm(preferences)
     }
-  }, [preferences])
+  }, [preferences, isSubmitting])
 
   const updateForm = <Key extends keyof Preferences>(key: Key, value: Preferences[Key]) => {
     setForm((current) => ({ ...current, [key]: value }))
+  }
+
+  const toggleMultiValue = <
+    K extends 'reward' | 'workMode' | 'timeCommitment' | 'opportunityType',
+  >(
+    key: K,
+    value: Preferences[K][number],
+  ) => {
+    setForm((current) => {
+      const currentValues = current[key] as string[]
+      const nextValues = currentValues.includes(value)
+        ? currentValues.filter((item) => item !== value)
+        : [...currentValues, value]
+
+      return {
+        ...current,
+        [key]: nextValues,
+      }
+    })
+  }
+
+  const clearMultiField = (key: 'reward' | 'workMode' | 'timeCommitment' | 'opportunityType') => {
+    setForm((current) => ({
+      ...current,
+      [key]: [],
+    }))
   }
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -61,8 +104,11 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
       college: form.target === 'student' ? form.college?.trim() : undefined,
       year: form.target === 'student' ? form.year?.trim() : undefined,
       location: form.location.trim(),
-      reward: form.reward.trim(),
-      skills: form.skills.map((skill) => skill.trim()).filter(Boolean),
+      reward: uniqueItems(form.reward),
+      workMode: uniqueItems(form.workMode),
+      timeCommitment: uniqueItems(form.timeCommitment),
+      opportunityType: uniqueItems(form.opportunityType),
+      skills: uniqueItems(form.skills.map((skill) => skill.trim()).filter(Boolean)),
     }
 
     setIsSubmitting(true)
@@ -81,9 +127,13 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
   }
 
   const completedSections = [
-    Boolean(form.target && form.reward.trim() && (form.target !== 'student' || (form.college?.trim() && form.year?.trim()))),
-    Boolean(form.location.trim() && form.workMode),
-    Boolean(form.timeCommitment && form.opportunityType),
+    Boolean(
+      form.target &&
+        form.reward.length > 0 &&
+        (form.target !== 'student' || (form.college?.trim() && form.year?.trim())),
+    ),
+    Boolean(form.location.trim() && form.workMode.length > 0),
+    Boolean(form.timeCommitment.length > 0 && form.opportunityType.length > 0),
     Boolean(form.skills.length),
   ].filter(Boolean).length
 
@@ -171,9 +221,11 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
                 <h2 className="mt-2 text-2xl font-black tracking-[-0.03em] text-white">Current direction</h2>
                 <div className="mt-5 space-y-4">
                   <ProfileLine label="Target" value={form.target} />
+                  <ProfileLine label="Reward" value={form.reward} />
                   <ProfileLine label="Work mode" value={form.workMode} />
-                  <ProfileLine label="Location" value={form.location || 'Not set'} />
+                  <ProfileLine label="Time commitment" value={form.timeCommitment} />
                   <ProfileLine label="Opportunity" value={form.opportunityType} />
+                  <ProfileLine label="Location" value={form.location || 'Not set'} />
                 </div>
                 <div className="mt-5 rounded-[22px] border border-white/10 bg-white/6 p-4">
                   <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">Skills added</p>
@@ -188,7 +240,7 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
                   {error}
                 </div>
               )}
-              
+
               <OnboardingSection
                 eyebrow="01. Identity"
                 helper="Tell us who you are so the recommendation engine knows what stage you are currently optimizing for."
@@ -202,13 +254,14 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
                     options={targets}
                     value={form.target}
                   />
-                  <FormField
-                    label="Reward"
-                    onChange={(event) => updateForm('reward', event.target.value)}
-                    placeholder="e.g. stipend, certificate"
-                    required
-                    type="text"
-                    value={form.reward}
+                </div>
+                <div className="mt-5">
+                  <MultiSelectField
+                    label="Rewards"
+                    options={rewards}
+                    selected={form.reward}
+                    onToggle={(value) => toggleMultiValue('reward', value as RewardType)}
+                    onClear={() => clearMultiField('reward')}
                   />
                 </div>
                 {form.target === 'student' ? (
@@ -248,12 +301,14 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
                     type="text"
                     value={form.location}
                   />
-                  <FormField
-                    as="select"
-                    label="Work mode"
-                    onChange={(event) => updateForm('workMode', event.target.value as WorkMode)}
+                </div>
+                <div className="mt-5">
+                  <MultiSelectField
+                    label="Work modes"
                     options={workModes}
-                    value={form.workMode}
+                    selected={form.workMode}
+                    onToggle={(value) => toggleMultiValue('workMode', value as WorkMode)}
+                    onClear={() => clearMultiField('workMode')}
                   />
                 </div>
               </OnboardingSection>
@@ -264,19 +319,19 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
                 title="Engagement style"
               >
                 <div className="grid gap-5 lg:grid-cols-2">
-                  <FormField
-                    as="select"
+                  <MultiSelectField
                     label="Time commitment"
-                    onChange={(event) => updateForm('timeCommitment', event.target.value)}
                     options={timeCommitments}
-                    value={form.timeCommitment}
+                    selected={form.timeCommitment}
+                    onToggle={(value) => toggleMultiValue('timeCommitment', value as TimeCommitment)}
+                    onClear={() => clearMultiField('timeCommitment')}
                   />
-                  <FormField
-                    as="select"
+                  <MultiSelectField
                     label="Opportunity type"
-                    onChange={(event) => updateForm('opportunityType', event.target.value as OpportunityType)}
                     options={opportunityTypes}
-                    value={form.opportunityType}
+                    selected={form.opportunityType}
+                    onToggle={(value) => toggleMultiValue('opportunityType', value as OpportunityType)}
+                    onClear={() => clearMultiField('opportunityType')}
                   />
                 </div>
               </OnboardingSection>
@@ -313,30 +368,7 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
                       disabled={isSubmitting}
                       type="submit"
                     >
-                      {isSubmitting ? (
-                        <span className="flex items-center gap-2">
-                          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            />
-                            <path
-                              className="opacity-75"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                              fill="currentColor"
-                            />
-                          </svg>
-                          Analyzing profile...
-                        </span>
-                      ) : isEditing ? (
-                        'Update preferences'
-                      ) : (
-                        'Build my trajectory'
-                      )}
+                      {isSubmitting ? 'Analyzing profile...' : isEditing ? 'Update preferences' : 'Build my trajectory'}
                     </button>
                   </div>
                 </div>
@@ -368,11 +400,78 @@ function SectionChip({ index, title, text }: { index: string; title: string; tex
   )
 }
 
-function ProfileLine({ label, value }: { label: string; value: string }) {
+function MultiSelectField({
+  label,
+  options,
+  selected,
+  onToggle,
+  onClear,
+}: {
+  label: string
+  options: string[]
+  selected: string[]
+  onToggle: (value: string) => void
+  onClear: () => void
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-black text-slate-900">{label}</p>
+        <button
+          type="button"
+          onClick={onClear}
+          disabled={!selected.length}
+          className="text-xs font-black uppercase tracking-[0.08em] text-slate-500 transition hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Clear all
+        </button>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {options.map((option) => {
+          const checked = selected.includes(option)
+          return (
+            <label
+              key={option}
+              className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                checked
+                  ? 'border-blue-200 bg-blue-50 text-[#1257d6]'
+                  : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggle(option)}
+                className="h-4 w-4 accent-[#1257d6]"
+              />
+              <span>{option}</span>
+            </label>
+          )
+        })}
+      </div>
+      <div className="mt-3 flex min-h-10 flex-wrap gap-2">
+        {selected.map((item) => (
+          <button
+            key={item}
+            type="button"
+            onClick={() => onToggle(item)}
+            className="rounded-full border border-blue-100 bg-white px-3 py-1 text-xs font-black text-[#1257d6] transition hover:border-blue-200 hover:bg-blue-50"
+          >
+            {item} ×
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ProfileLine({ label, value }: { label: string; value: string | string[] }) {
+  const displayValue = Array.isArray(value) ? joinOrNotSet(value) : value
+
   return (
     <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-3 last:border-b-0 last:pb-0">
       <span className="text-sm text-slate-300">{label}</span>
-      <span className="text-right text-sm font-bold capitalize text-white">{value}</span>
+      <span className="text-right text-sm font-bold capitalize text-white">{displayValue}</span>
     </div>
   )
 }

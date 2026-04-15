@@ -9,45 +9,48 @@ export interface UpsertResultSummary {
 export const upsertOpportunities = async (
   opportunities: Opportunity[],
 ): Promise<UpsertResultSummary> => {
-  let upsertedCount = 0;
-  let modifiedCount = 0;
-
-  for (const item of opportunities) {
-    const normalizedType = item.type.toLowerCase();
-
-    const result = await OpportunityModel.updateOne(
-      {
-        title: item.title,
-        company: item.company,
-      },
-      {
-        $set: {
-          skills: item.skills,
-          location: item.location,
-          type: normalizedType,
-          deadline: item.deadline,
-          reward: item.reward,
-          source: item.source,
-          link: item.link,
-          createdAt: item.createdAt,
-        },
-      },
-      {
-        upsert: true,
-      },
-    );
-
-    if (result.upsertedCount > 0) {
-      upsertedCount += result.upsertedCount;
-    }
-
-    if (result.modifiedCount > 0) {
-      modifiedCount += result.modifiedCount;
-    }
+  if (!opportunities.length) {
+    return {
+      upsertedCount: 0,
+      modifiedCount: 0,
+    };
   }
 
-  return {
-    upsertedCount,
-    modifiedCount,
-  };
+  try {
+    const operations = opportunities
+      .filter((item) => Boolean(item.link))
+      .map((item) => {
+        const normalizedType = item.type.toLowerCase();
+
+        return {
+          updateOne: {
+            filter: { link: item.link },
+            update: {
+              $set: {
+                ...item,
+                type: normalizedType,
+              },
+            },
+            upsert: true,
+          },
+        };
+      });
+
+    if (!operations.length) {
+      return {
+        upsertedCount: 0,
+        modifiedCount: 0,
+      };
+    }
+
+    const result = await OpportunityModel.bulkWrite(operations);
+
+    return {
+      upsertedCount: result.upsertedCount,
+      modifiedCount: result.modifiedCount,
+    };
+  } catch (error) {
+    console.error("Failed to upsert opportunities with bulkWrite:", error);
+    throw error;
+  }
 };

@@ -3,6 +3,7 @@ import cors from "cors";
 import "dotenv/config";
 
 import opportunityRoutes from "./routes/opportunityRoutes.js";
+import recommendationRoutes from "./routes/recommendationRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import dataRoutes from "./routes/dataRoutes.js";
 import scraperRoutes from "./routes/scraperRoutes.js";
@@ -28,6 +29,7 @@ app.get("/health", (req: Request, res: Response) => {
 
 // Routes
 app.use(`${apiPrefix}/opportunities`, opportunityRoutes);
+app.use(`${apiPrefix}/recommendations`, recommendationRoutes);
 app.use(`${apiPrefix}/users`, userRoutes);
 app.use(`${apiPrefix}/preferences`, preferenceRoutes);
 app.use(`${apiPrefix}/data`, dataRoutes);
@@ -41,6 +43,7 @@ app.get("/", (req: Request, res: Response) => {
     endpoints: {
       users: `${apiPrefix}/users`,
       opportunities: `${apiPrefix}/opportunities`,
+      recommendations: `${apiPrefix}/recommendations/:userId`,
       data: `${apiPrefix}/data`,
       scraper: `${apiPrefix}/scraper/run-all`,
       preferences: `${apiPrefix}/preferences`,

@@ -21,7 +21,7 @@ router.post("/", upsertPreference);
 
 /**
  * GET /api/preferences/user/:id
- * Get preferences by user ID
+ * Get preferences by user ID path param
  */
 router.get("/user/:id", getPreference);
 

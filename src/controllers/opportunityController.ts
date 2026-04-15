@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
 import Opportunity from "../models/Opportunity.js";
-import User from "../models/User.js";
-import { rankOpportunities } from "../services/recommendationEngine.js";
+import { getRecommendationsForUser } from "../services/recommendationService.js";
 
 export const getOpportunitiesFeed = async (
   req: Request,
@@ -10,24 +9,20 @@ export const getOpportunitiesFeed = async (
   try {
     const { userId } = req.params;
 
-    // Fetch user
-    const user = await User.findById(userId);
-    if (!user) {
-      res.status(404).json({ error: "User not found" });
+    if (!userId) {
+      res.status(400).json({ error: "User ID is required." });
       return;
     }
 
-    // Fetch all opportunities
-    const opportunities = await Opportunity.find();
+    const limit = Number.parseInt(String(req.query.limit ?? "20"), 10);
+    const minScore = Number.parseFloat(String(req.query.minScore ?? "0"));
 
-    // Rank opportunities based on user preferences
-    const rankedOpportunities = rankOpportunities(opportunities, user);
-
-    res.status(200).json({
-      success: true,
-      count: rankedOpportunities.length,
-      feed: rankedOpportunities,
+    const recommendations = await getRecommendationsForUser(userId, {
+      limit: Number.isFinite(limit) && limit > 0 ? limit : 20,
+      minScore: Number.isFinite(minScore) && minScore >= 0 ? minScore : 0,
     });
+
+    res.status(200).json(recommendations);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch opportunities feed" });
   }

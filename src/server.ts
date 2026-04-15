@@ -2,12 +2,18 @@ import "dotenv/config";
 import app from "./app.js";
 import connectDatabase from "./config/database.js";
 import { startScraperCronJobs } from "./scripts/cronJobs.js";
+import Preference from "./models/Preference.js";
+import Opportunity from "./models/Opportunity.js";
 const PORT = process.env.PORT || 5000;
 
 const startServer = async (): Promise<void> => {
   try {
     // Connect to MongoDB
     await connectDatabase();
+
+    // Sync indexes — drops any stale indexes (e.g. removed compound multi-array index)
+    await Preference.syncIndexes();
+    await Opportunity.syncIndexes();
 
     // Start Express server
     app.listen(PORT, () => {

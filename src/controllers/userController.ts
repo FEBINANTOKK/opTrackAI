@@ -1,10 +1,10 @@
-import crypto from "crypto";
-import { promisify } from "util";
 import { Request, Response } from "express";
 import User from "../models/User.js";
 import Preference from "../models/Preference.js";
-
-const scryptAsync = promisify(crypto.scrypt);
+import {
+  createPasswordHash,
+  verifyPassword,
+} from "../services/passwordService.js";
 
 type PublicUser = {
   id: string;
@@ -25,29 +25,9 @@ const toPublicUser = (user: {
 const normalizeCredential = (value: unknown): string =>
   typeof value === "string" ? value.trim() : "";
 
-const createPasswordHash = async (password: string): Promise<string> => {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
-  return `${salt}:${derivedKey.toString("hex")}`;
-};
-
-const verifyPassword = async (password: string, passwordHash: string): Promise<boolean> => {
-  const [salt, storedHash] = passwordHash.split(":");
-  if (!salt || !storedHash) {
-    return false;
-  }
-
-  const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
-  const storedBuffer = Buffer.from(storedHash, "hex");
-
-  if (storedBuffer.length !== derivedKey.length) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(storedBuffer, derivedKey);
-};
-
-const createAuthToken = (): string => crypto.randomBytes(32).toString("hex");
+const createAuthToken = (): string =>
+  globalThis.crypto.randomUUID().replace(/-/g, "") +
+  globalThis.crypto.randomUUID().replace(/-/g, "");
 
 const getBearerToken = (authorizationHeader?: string): string | null => {
   if (!authorizationHeader) {
@@ -62,7 +42,10 @@ const getBearerToken = (authorizationHeader?: string): string | null => {
   return token.trim();
 };
 
-export const createUser = async (req: Request, res: Response): Promise<void> => {
+export const createUser = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const username = normalizeCredential(req.body.username);
     const email = normalizeCredential(req.body.email).toLowerCase();
@@ -70,7 +53,8 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
 
     if (!username || !email || password.length < 6) {
       res.status(400).json({
-        error: "Username, email, and a password with at least 6 characters are required.",
+        error:
+          "Username, email, and a password with at least 6 characters are required.",
       });
       return;
     }
@@ -81,7 +65,10 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
 
     if (existingUser) {
       res.status(409).json({
-        error: existingUser.email === email ? "Email is already registered." : "Username is already taken.",
+        error:
+          existingUser.email === email
+            ? "Email is already registered."
+            : "Username is already taken.",
       });
       return;
     }
@@ -137,7 +124,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
     await user.save();
 
     const preference = await Preference.findOne({ userId: user._id });
-    
+
     res.status(200).json({
       token: authToken,
       user: toPublicUser(user),
@@ -149,12 +136,17 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const getCurrentUser = async (req: Request, res: Response): Promise<void> => {
+export const getCurrentUser = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const token = getBearerToken(req.headers.authorization);
 
     if (!token) {
-      res.status(401).json({ error: "Authorization: Bearer <token> header is required." });
+      res
+        .status(401)
+        .json({ error: "Authorization: Bearer <token> header is required." });
       return;
     }
 
@@ -165,10 +157,10 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
     }
 
     const preference = await Preference.findOne({ userId: user._id });
-    
-    res.status(200).json({ 
+
+    res.status(200).json({
       user: toPublicUser(user),
-      preference: preference || null
+      preference: preference || null,
     });
   } catch (error) {
     console.error("Failed to get current user:", error);
@@ -176,7 +168,10 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
   }
 };
 
-export const getUserById = async (req: Request, res: Response): Promise<void> => {
+export const getUserById = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
@@ -191,7 +186,10 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-export const updateUser = async (req: Request, res: Response): Promise<void> => {
+export const updateUser = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const updates: Record<string, unknown> = {};
 
@@ -202,16 +200,23 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
       updates.location = req.body.location.trim();
     }
     if (Array.isArray(req.body.skills)) {
-      updates.skills = req.body.skills.filter((skill: unknown) => typeof skill === "string");
+      updates.skills = req.body.skills.filter(
+        (skill: unknown) => typeof skill === "string",
+      );
     }
     if (Array.isArray(req.body.preferredTypes)) {
-      updates.preferredTypes = req.body.preferredTypes.filter((type: unknown) => typeof type === "string");
+      updates.preferredTypes = req.body.preferredTypes.filter(
+        (type: unknown) => typeof type === "string",
+      );
     }
     if (typeof req.body.experienceLevel === "string") {
       updates.experienceLevel = req.body.experienceLevel;
     }
 
-    const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
+    const user = await User.findByIdAndUpdate(req.params.id, updates, {
+      new: true,
+      runValidators: true,
+    });
     if (!user) {
       res.status(404).json({ error: "User not found." });
       return;
@@ -224,7 +229,10 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-export const deleteUser = async (req: Request, res: Response): Promise<void> => {
+export const deleteUser = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) {
