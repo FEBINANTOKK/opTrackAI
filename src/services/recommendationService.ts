@@ -1,5 +1,10 @@
 import Opportunity, { IOpportunity } from "../models/Opportunity.js";
 import Preference from "../models/Preference.js";
+import axios from "axios";
+
+const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "phi3";
+
 
 const MINIMUM_RESULTS = 10;
 const DEFAULT_RETURN_LIMIT = 20;
@@ -7,6 +12,7 @@ const DEFAULT_FETCH_LIMIT = 200;
 const DEFAULT_MIN_SCORE = 0;
 const MAX_FETCH_LIMIT = 200;
 
+// ... [Keep existing weight-based scoring constants and helpers] ...
 const STRONG_TITLE_KEYWORDS = [
   "developer",
   "engineer",
@@ -40,14 +46,14 @@ const ROLE_MAP: Record<string, string[]> = {
 };
 
 type ScoredOpportunity = {
-  opportunity: IOpportunity;
+  opportunity: IOpportunity & { matchPercentage?: number; matchReason?: string };
   score: number;
 };
 
 export interface RecommendationResponse {
   success: true;
   count: number;
-  opportunities: IOpportunity[];
+  opportunities: Array<IOpportunity & { matchPercentage?: number; matchReason?: string }>;
 }
 
 export interface RecommendationQueryOptions {
@@ -393,7 +399,7 @@ const getScoredOpportunity = (
 
 const dedupeByOpportunity = (items: IOpportunity[]): IOpportunity[] => {
   const seen = new Set<string>();
-  const unique: IOpportunity[] = [];
+  const uniqueItems: IOpportunity[] = [];
 
   for (const item of items) {
     const key = item.link || item._id.toString();
@@ -402,11 +408,135 @@ const dedupeByOpportunity = (items: IOpportunity[]): IOpportunity[] => {
     }
 
     seen.add(key);
-    unique.push(item);
+    uniqueItems.push(item);
   }
 
-  return unique;
+  return uniqueItems;
 };
+
+// --- NEW AI MATCHING LOGIC ---
+
+async function enrichWithAI(
+  userProfile: any,
+  candidates: IOpportunity[],
+): Promise<Array<IOpportunity & { matchPercentage?: number; matchReason?: string }>> {
+  if (candidates.length === 0) {
+    console.log("[AI] Skipping enrichment: no candidates");
+    return candidates;
+  }
+
+  const skills = normalizeStringArray(userProfile?.skills);
+  const workMode = normalizeStringArray(userProfile?.workMode);
+  const location = normalizeText(userProfile?.location);
+  const opportunityType = normalizeStringArray(userProfile?.opportunityType);
+  const target = normalizeText(userProfile?.target) || "student";
+
+  console.log(`[AI] Enriching ${candidates.length} candidates via Ollama (${OLLAMA_MODEL}) for profile: skills=[${skills}], workMode=[${workMode}], location=${location}`);
+
+  try {
+    const prompt = `You are an expert career and opportunity matching engine.
+Analyze the following user profile and opportunities.
+
+USER PROFILE:
+- Target: ${target}
+- Skills: ${skills.join(", ") || "Not specified"}
+- Work Mode Preference: ${workMode.join(", ") || "Any"}
+- Location Preference: ${location || "Any"}
+- Opportunity Types: ${opportunityType.join(", ") || "Any"}
+
+OPPORTUNITIES:
+${candidates.map((c, i) => `[${i}] Title: ${c.title}, Company: ${c.company}, Skills: ${(c.skills || []).join(", ")}, Type: ${c.type}, Location: ${c.location}`).join("\n")}
+
+TASK:
+For each opportunity, calculate TWO scores:
+1. "skillMatch" (0-100): How well the user's skills, location and work mode match this opportunity
+2. "matchPercentage" (0-100): Overall AI-assessed fit considering career growth, relevance and opportunity quality
+Also provide a "matchReason" (max 15 words) explaining the fit.
+
+Respond ONLY with a valid JSON array. No markdown, no explanation, no extra text.
+Example: [{"index": 0, "skillMatch": 72, "matchPercentage": 85, "matchReason": "Strong React overlap and remote aligns with preference."}]`;
+
+    const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
+      model: OLLAMA_MODEL,
+      prompt,
+      stream: false,
+    }, {
+      timeout: 120000,
+    });
+
+    const rawText = response.data.response || "";
+    console.log("[AI] Raw Ollama response:", rawText.substring(0, 300));
+
+    // Extract JSON from the response
+    let jsonText = rawText.trim();
+    
+    const jsonArrayMatch = jsonText.match(/\[[\s\S]*\]/);
+    if (jsonArrayMatch) {
+      jsonText = jsonArrayMatch[0];
+    }
+
+    const codeBlockMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
+      jsonText = codeBlockMatch[1].trim();
+      const innerArrayMatch = jsonText.match(/\[[\s\S]*\]/);
+      if (innerArrayMatch) jsonText = innerArrayMatch[0];
+    }
+
+    let aiAssessments: any[] = [];
+    try {
+      aiAssessments = JSON.parse(jsonText);
+    } catch (parseErr) {
+      console.log("[AI] Initial JSON parse failed, attempting repair...");
+      // Try to fix common LLM JSON issues:
+      // 1. Remove trailing commas
+      let repaired = jsonText.replace(/,\s*([}\]])/g, '$1');
+      // 2. Fix unterminated strings by removing the last incomplete object
+      const lastCloseBrace = repaired.lastIndexOf('}');
+      if (lastCloseBrace !== -1) {
+        repaired = repaired.substring(0, lastCloseBrace + 1) + ']';
+      }
+      try {
+        aiAssessments = JSON.parse(repaired);
+      } catch {
+        console.error("[AI] JSON repair failed, extracting individual objects...");
+        // Extract valid objects individually
+        const objRegex = /\{[^{}]*"index"\s*:\s*\d+[^{}]*\}/g;
+        const matches = repaired.match(objRegex) || [];
+        for (const m of matches) {
+          try {
+            aiAssessments.push(JSON.parse(m));
+          } catch { /* skip malformed */ }
+        }
+      }
+    }
+    
+    console.log(`[AI] Successfully parsed ${aiAssessments.length} assessments from Ollama`);
+    
+    return candidates.map((opp, i) => {
+      const assessment = aiAssessments.find((a: any) => a.index === i);
+      const oppObj = typeof opp.toObject === 'function' ? opp.toObject() : { ...opp };
+      return {
+        ...oppObj,
+        skillMatch: Math.min(100, Math.max(0, assessment?.skillMatch ?? 0)),
+        matchPercentage: Math.min(100, Math.max(0, assessment?.matchPercentage ?? 0)),
+        matchReason: assessment?.matchReason ?? "Profile analysis complete.",
+      };
+    });
+  } catch (error: any) {
+    if (error?.code === 'ECONNREFUSED') {
+      console.error("[AI] Ollama not running at", OLLAMA_URL);
+    } else {
+      console.error("[AI] Enrichment Error:", error?.message || error);
+    }
+    // Return candidates without AI data rather than failing
+    return candidates.map((opp) => {
+      const oppObj = typeof opp.toObject === 'function' ? opp.toObject() : { ...opp };
+      return { ...oppObj };
+    });
+  }
+}
+
+
 
 export const getRecommendations = async (
   userId: string,
@@ -470,6 +600,8 @@ export const getRecommendations = async (
     .filter((item) => item.score >= minScore)
     .sort((left, right) => right.score - left.score);
 
+  console.log(`[Reco] Scored ${scored.length} opportunities from ${candidateOpportunities.length} candidates`);
+
   let finalOpportunities = dedupeByOpportunity(
     scored.map((item) => item.opportunity),
   );
@@ -479,16 +611,24 @@ export const getRecommendations = async (
       .sort({ createdAt: -1 })
       .limit(fetchLimit);
 
+    console.log(`[Reco] Added ${fallback.length} fallback opportunities`);
     finalOpportunities = dedupeByOpportunity([
       ...finalOpportunities,
       ...fallback,
     ]);
   }
 
-  const opportunities = finalOpportunities.slice(
+  const sliced = finalOpportunities.slice(
     0,
     Math.max(MINIMUM_RESULTS, requestedLimit),
   );
+
+  // Enrich top 10 with AI (after all filtering and fallback)
+  const topForAI = sliced.slice(0, 10);
+  const rest = sliced.slice(10);
+  const aiEnrichedTop = await enrichWithAI(preference, topForAI);
+
+  const opportunities = [...aiEnrichedTop, ...rest];
 
   return {
     success: true,

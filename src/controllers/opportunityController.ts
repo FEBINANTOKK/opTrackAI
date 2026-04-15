@@ -33,10 +33,21 @@ export const getAllOpportunities = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const opportunities = await Opportunity.find();
+    const limit = Number.parseInt(String(req.query.limit ?? "10"), 10);
+    const page = Number.parseInt(String(req.query.page ?? "1"), 10);
+    const skip = (page - 1) * limit;
+
+    const total = await Opportunity.countDocuments();
+    const opportunities = await Opportunity.find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
     res.status(200).json({
       success: true,
       count: opportunities.length,
+      total,
+      hasMore: skip + opportunities.length < total,
       opportunities,
     });
   } catch (error) {

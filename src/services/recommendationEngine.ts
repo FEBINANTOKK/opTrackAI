@@ -1,5 +1,9 @@
 import { IOpportunity } from "../models/Opportunity.js";
 import { IUser } from "../models/User.js";
+import axios from "axios";
+
+const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "phi3";
 
 export interface RecommendationResult {
   score: number;
@@ -19,87 +23,99 @@ const getDaysLeft = (deadline: Date): number => {
   return Math.ceil(timeDiff / (1000 * 3600 * 24));
 };
 
-export const calculateScore = (
+export const calculateScoreAI = async (
   opportunity: IOpportunity,
   user: IUser,
-): RecommendationResult => {
-  let score = 0;
-  const reasons: string[] = [];
+): Promise<RecommendationResult> => {
+  try {
+    const prompt = `You are an expert career and opportunity matching engine.
+Analyze the following user profile and an opportunity.
 
-  // Skill Match
-  const matchedSkills = opportunity.skills.filter((skill) =>
-    user.skills.includes(skill),
-  );
+USER PROFILE:
+- Skills: ${user.skills?.join(", ") || "Not specified"}
+- Target Audience/Experience: ${user.targetAudience?.join(", ") || "Any"}
+- Location Preference: ${user.location || "Any"}
+- Opportunity Types: ${user.preferredTypes?.join(", ") || "Any"}
 
-  matchedSkills.forEach(() => {
-    score += 4;
-  });
+OPPORTUNITY:
+- Title: ${opportunity.title}
+- Company: ${opportunity.company}
+- Skills Required: ${(opportunity.skills || []).join(", ") || "None specified"}
+- Type: ${opportunity.type}
+- Location: ${opportunity.location}
 
-  if (matchedSkills.length > 0) {
-    reasons.push(
-      `Matched ${matchedSkills.length} skill(s): ${matchedSkills.join(", ")}`,
+TASK:
+Calculate a precise "score" (0-100) evaluating how well this opportunity fits the user's profile, and provide a single concise "reason" (max 15 words).
+Respond ONLY with valid JSON. No markdown, no explanation.
+Example: {"score": 85, "reason": "Strong skill overlap and matches preferred location."}`;
+
+    const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
+      model: OLLAMA_MODEL,
+      prompt,
+      stream: false,
+    }, {
+      timeout: 120000,
+    });
+
+    const rawText = response.data.response || "";
+    let jsonText = rawText.trim();
+
+    const codeBlockMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
+      jsonText = codeBlockMatch[1].trim();
+    } else {
+      const braceMatch = jsonText.match(/\{[\s\S]*\}/);
+      if (braceMatch) jsonText = braceMatch[0];
+    }
+
+    const aiAssessment = JSON.parse(jsonText);
+
+    return {
+      score: Math.min(100, Math.max(0, aiAssessment?.score ?? 0)),
+      reasons: [aiAssessment?.reason ?? "Profile analysis complete."],
+    };
+  } catch (error) {
+    console.error("[AI Engine] Scoring Error:", error);
+    // Fallback to basic match
+    const matchedSkills = opportunity.skills.filter((skill) =>
+      user.skills?.includes(skill),
     );
+    return {
+      score: matchedSkills.length > 0 ? 50 : 20,
+      reasons: matchedSkills.length > 0 ? ["Partial skill match"] : ["Basic profile match"],
+    };
   }
-
-  // Type Match
-  if (user.preferredTypes.includes(opportunity.type)) {
-    score += 3;
-    reasons.push(`Matches your preferred type: ${opportunity.type}`);
-  }
-
-  // Location Match
-  if (opportunity.location === "Remote") {
-    score += 2;
-    reasons.push("Remote opportunity - flexible location");
-  } else if (opportunity.location === user.location) {
-    score += 2;
-    reasons.push(`Located in your area: ${user.location}`);
-  }
-
-  // Deadline Urgency
-  const daysLeft = getDaysLeft(opportunity.deadline);
-  if (daysLeft <= 2) {
-    score += 3;
-    reasons.push(`⏰ Closing soon - ${daysLeft} days left`);
-  } else if (daysLeft <= 5) {
-    score += 2;
-    reasons.push(`📅 Closing in ${daysLeft} days`);
-  } else if (daysLeft > 30) {
-    score += 1;
-    reasons.push(`${daysLeft} days until deadline`);
-  }
-
-  // Reward Boost
-  if (opportunity.reward) {
-    score += 1;
-    reasons.push(`Has reward: ${opportunity.reward}`);
-  }
-
-  return {
-    score: Math.min(score, 100),
-    reasons: reasons.length > 0 ? reasons : ["Basic match"],
-  };
 };
 
-export const rankOpportunities = (
+export const rankOpportunitiesAI = async (
   opportunities: IOpportunity[],
   user: IUser,
-): RankedOpportunity[] => {
-  return opportunities
-    .map((opportunity) => {
-      const { score, reasons } = calculateScore(opportunity, user);
-      const matchedSkills = opportunity.skills.filter((skill) =>
-        user.skills.includes(skill),
-      );
-      const daysLeft = getDaysLeft(opportunity.deadline);
+): Promise<RankedOpportunity[]> => {
+  if (opportunities.length === 0) return [];
 
-      return {
-        ...opportunity.toObject(),
-        score,
-        matchedSkills,
-        daysLeft,
-        reasons,
-      } as RankedOpportunity;
-    })
-    .sort((a, b) => b.score - a.score);
+  // We process them in parallel for speed, though for many items you'd want to batch them
+  // or use the bulk query approach from recommendationService.ts
+  const rankPromises = opportunities.map(async (opportunity) => {
+    const { score, reasons } = await calculateScoreAI(opportunity, user);
+
+    const matchedSkills = (opportunity.skills || []).filter((skill) =>
+      user.skills?.includes(skill),
+    );
+    const daysLeft = getDaysLeft(opportunity.deadline);
+
+    // Make sure we carry forward any existing Mongoose object properties if this is a Model instance
+    const oppObj = typeof opportunity.toObject === 'function' ? opportunity.toObject() : { ...opportunity };
+
+    return {
+      ...oppObj,
+      score,
+      matchedSkills,
+      daysLeft,
+      reasons,
+    } as RankedOpportunity;
+  });
+
+  const ranked = await Promise.all(rankPromises);
+  return ranked.sort((a, b) => b.score - a.score);
 };
+

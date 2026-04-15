@@ -1,10 +1,11 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { FormField } from '../components/FormField'
 import { SkillsInput } from '../components/SkillsInput'
 import { Card } from '../components/ui/Card'
 import { useAuthStore } from '../store/useAuthStore'
 import { savePreferences } from '../lib/authApi'
+import { normalizePreferences } from '../utils/preferenceUtils'
 import type {
   OpportunityType,
   Preferences,
@@ -46,7 +47,7 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState<Preferences>(() =>
-    preferences ?? {
+    normalizePreferences(preferences) ?? {
       target: 'student',
       reward: [],
       college: '',
@@ -61,7 +62,7 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
 
   useEffect(() => {
     if (preferences && !isSubmitting) {
-      setForm(preferences)
+      setForm(normalizePreferences(preferences))
     }
   }, [preferences, isSubmitting])
 

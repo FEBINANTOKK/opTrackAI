@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Preferences, User } from '../types/auth'
+import { normalizePreferences } from '../utils/preferenceUtils'
 
 type AuthEntry = 'login' | 'signup' | null
 
@@ -28,7 +29,7 @@ export const useAuthStore = create<AuthState>()(
         localStorage.setItem('optrack_token', token)
         set({ token })
       },
-      setPreferences: (preferences) => set({ preferences }),
+      setPreferences: (preferences) => set({ preferences: normalizePreferences(preferences) }),
       logout: () => {
         localStorage.removeItem('optrack_token')
         set({ token: null, user: null, preferences: null, authEntry: null })
@@ -36,7 +37,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'optrack-auth',
-      partialize: ({ token, user, preferences, authEntry }) => ({ token, user, preferences, authEntry }),
+      partialize: ({ token, user, preferences, authEntry }) => ({ token, user, preferences: normalizePreferences(preferences), authEntry }),
     },
   ),
 )
