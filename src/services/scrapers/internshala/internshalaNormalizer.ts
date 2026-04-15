@@ -1,4 +1,7 @@
-import type { Opportunity, RawInternshalaOpportunity } from "./types.js";
+import type {
+  Opportunity,
+  RawInternshalaOpportunity,
+} from "../shared/types.js";
 
 const DEFAULT_DEADLINE_DAYS = 30;
 

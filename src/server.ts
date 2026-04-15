@@ -1,7 +1,7 @@
 import "dotenv/config";
 import app from "./app.js";
 import connectDatabase from "./config/database.js";
-import { runInternshalaScraper } from "./services/scraper/internshalaScraper.js";
+import { startScraperCronJobs } from "./scripts/cronJobs.js";
 const PORT = process.env.PORT || 5000;
 
 const startServer = async (): Promise<void> => {
@@ -11,20 +11,16 @@ const startServer = async (): Promise<void> => {
 
     // Start Express server
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
-      console.log(`📚 API Documentation:`);
+      console.log(` Server running on http://localhost:${PORT}`);
+      console.log(` API Documentation:`);
       console.log(`   - Health Check: http://localhost:${PORT}/health`);
       console.log(`   - API Base URL: http://localhost:${PORT}/api`);
+      startScraperCronJobs();
     });
   } catch (error) {
-    console.error("❌ Failed to start server:", error);
+    console.error(" Failed to start server:", error);
     process.exit(1);
   }
 };
 
 startServer();
-
-(async () => {
-  const result = await runInternshalaScraper();
-  console.log("SCRAPER RESULT:", result);
-})();

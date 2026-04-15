@@ -1,8 +1,11 @@
 import { chromium } from "playwright";
 
 import { normalizeInternshalaOpportunities } from "./internshalaNormalizer.js";
-import { upsertOpportunities } from "./opportunityRepository.js";
-import type { RawInternshalaOpportunity, ScraperRunResult } from "./types.js";
+import { upsertOpportunities } from "../shared/opportunityRepository.js";
+import type {
+  RawInternshalaOpportunity,
+  ScraperRunResult,
+} from "../shared/types.js";
 
 const INTERNSHALA_URL = "https://internshala.com/internships";
 const MAX_PAGES = 5;

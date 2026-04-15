@@ -1,4 +1,4 @@
-import OpportunityModel from "../../models/Opportunity.js";
+import OpportunityModel from "../../../models/Opportunity.js";
 import type { Opportunity } from "./types.js";
 
 export interface UpsertResultSummary {
@@ -13,6 +13,8 @@ export const upsertOpportunities = async (
   let modifiedCount = 0;
 
   for (const item of opportunities) {
+    const normalizedType = item.type.toLowerCase();
+
     const result = await OpportunityModel.updateOne(
       {
         title: item.title,
@@ -22,7 +24,7 @@ export const upsertOpportunities = async (
         $set: {
           skills: item.skills,
           location: item.location,
-          type: item.type,
+          type: normalizedType,
           deadline: item.deadline,
           reward: item.reward,
           source: item.source,

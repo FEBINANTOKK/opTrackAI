@@ -4,6 +4,8 @@ import "dotenv/config";
 
 import opportunityRoutes from "./routes/opportunityRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import dataRoutes from "./routes/dataRoutes.js";
+import scraperRoutes from "./routes/scraperRoutes.js";
 
 const app: Express = express();
 
@@ -26,6 +28,8 @@ app.get("/health", (req: Request, res: Response) => {
 // Routes
 app.use(`${apiPrefix}/opportunities`, opportunityRoutes);
 app.use(`${apiPrefix}/users`, userRoutes);
+app.use(`${apiPrefix}/data`, dataRoutes);
+app.use(`${apiPrefix}/scraper`, scraperRoutes);
 
 // Root endpoint
 app.get("/", (req: Request, res: Response) => {
@@ -35,6 +39,8 @@ app.get("/", (req: Request, res: Response) => {
     endpoints: {
       users: `${apiPrefix}/users`,
       opportunities: `${apiPrefix}/opportunities`,
+      data: `${apiPrefix}/data`,
+      scraper: `${apiPrefix}/scraper/run-all`,
       health: "/health",
     },
   });
