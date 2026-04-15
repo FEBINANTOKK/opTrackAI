@@ -623,15 +623,19 @@ export function DashboardPage({
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge>{opportunity.type}</Badge>
-                            <Badge tone="green">
-                              {opportunity.match}% match
-                            </Badge>
-                            {opportunity.matchPercentage != null && (
-                              <Badge tone="blue">
-                                🤖 AI: {opportunity.matchPercentage}%
-                              </Badge>
+                            {viewMode === 'recommended' && (
+                              <>
+                                <Badge tone="green">
+                                  {opportunity.match}% match
+                                </Badge>
+                                {opportunity.matchPercentage != null && (
+                                  <Badge tone="blue">
+                                    🤖 AI: {opportunity.matchPercentage}%
+                                  </Badge>
+                                )}
+                                <Badge tone="blue">RANK {(currentPage - 1) * 10 + index + 1}</Badge>
+                              </>
                             )}
-                            <Badge tone="blue">RANK {(currentPage - 1) * 10 + index + 1}</Badge>
                           </div>
 
                           <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -670,8 +674,9 @@ export function DashboardPage({
 
                           <div className="mt-6 space-y-4">
                             {/* Score Overview Strip */}
-                            <div className="rounded-[22px] border border-slate-200 bg-[linear-gradient(135deg,_#f8fafc_0%,_#ecfeff_50%,_#f0f9ff_100%)] p-5 shadow-sm">
-                              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                            {viewMode === 'recommended' && (
+                              <div className="rounded-[22px] border border-slate-200 bg-[linear-gradient(135deg,_#f8fafc_0%,_#ecfeff_50%,_#f0f9ff_100%)] p-5 shadow-sm">
+                                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                                 <div className="flex items-center gap-5">
                                   {/* Circular AI Score */}
                                   <div className="relative flex-shrink-0">
@@ -747,9 +752,10 @@ export function DashboardPage({
                                 )}
                               </div>
                             </div>
+                            )}
 
                             {/* Why This Fits + Breakdown Grid */}
-                            <div className="grid gap-4 lg:grid-cols-2">
+                            <div className={`grid gap-4 ${viewMode === 'recommended' ? 'lg:grid-cols-2' : ''}`}>
                               {/* Why This Fits */}
                               <div className="rounded-[22px] border border-slate-200 bg-white p-5">
                                 <div className="flex items-center gap-2 mb-4">
@@ -772,42 +778,44 @@ export function DashboardPage({
                               </div>
 
                               {/* Match Breakdown */}
-                              <div className="rounded-[22px] border border-slate-200 bg-white p-5">
-                                <div className="flex items-center gap-2 mb-4">
-                                  <span className="text-base">📊</span>
-                                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
-                                    Match Breakdown
-                                  </p>
-                                </div>
-                                <div className="space-y-4">
-                                  <MetricBar
-                                    label="Skill overlap"
-                                    value={`${matchingSkillCount}/${opportunity.skills.length}`}
-                                    width={`${Math.max((matchingSkillCount / opportunity.skills.length) * 100, 16)}%`}
-                                  />
-                                  <MetricBar
-                                    label="Work style alignment"
-                                    value={opportunity.mode}
-                                    width={
-                                      preferredModes.includes(
-                                        opportunity.mode as
-                                          | "Remote"
-                                          | "Onsite"
-                                          | "Hybrid",
-                                      )
-                                        ? "100%"
-                                        : "62%"
-                                    }
-                                  />
-                                  {opportunity.matchPercentage != null && (
+                              {viewMode === 'recommended' && (
+                                <div className="rounded-[22px] border border-slate-200 bg-white p-5">
+                                  <div className="flex items-center gap-2 mb-4">
+                                    <span className="text-base">📊</span>
+                                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
+                                      Match Breakdown
+                                    </p>
+                                  </div>
+                                  <div className="space-y-4">
                                     <MetricBar
-                                      label="AI Precision"
-                                      value={`${opportunity.matchPercentage}%`}
-                                      width={`${Math.max(opportunity.matchPercentage, 8)}%`}
+                                      label="Skill overlap"
+                                      value={`${matchingSkillCount}/${opportunity.skills.length}`}
+                                      width={`${Math.max((matchingSkillCount / opportunity.skills.length) * 100, 16)}%`}
                                     />
-                                  )}
+                                    <MetricBar
+                                      label="Work style alignment"
+                                      value={opportunity.mode}
+                                      width={
+                                        preferredModes.includes(
+                                          opportunity.mode as
+                                            | "Remote"
+                                            | "Onsite"
+                                            | "Hybrid",
+                                        )
+                                          ? "100%"
+                                          : "62%"
+                                      }
+                                    />
+                                    {opportunity.matchPercentage != null && (
+                                      <MetricBar
+                                        label="AI Precision"
+                                        value={`${opportunity.matchPercentage}%`}
+                                        width={`${Math.max(opportunity.matchPercentage, 8)}%`}
+                                      />
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
+                              )}
                             </div>
                           </div>
 
@@ -827,26 +835,28 @@ export function DashboardPage({
                           </p>
 
                           {/* Dual-score display: Match % + AI Score */}
-                          <div className="mt-5 grid grid-cols-2 gap-3">
-                            <div className="rounded-[20px] border border-white/10 bg-white/6 p-4">
-                              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
-                                Match %
-                              </p>
-                              <p className="mt-2 text-3xl font-black tracking-[-0.05em] text-emerald-400">
-                                {opportunity.match}%
-                              </p>
+                          {viewMode === 'recommended' && (
+                            <div className="mt-5 grid grid-cols-2 gap-3">
+                              <div className="rounded-[20px] border border-white/10 bg-white/6 p-4">
+                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                                  Match %
+                                </p>
+                                <p className="mt-2 text-3xl font-black tracking-[-0.05em] text-emerald-400">
+                                  {opportunity.match}%
+                                </p>
+                              </div>
+                              <div className="rounded-[20px] border border-cyan-500/20 bg-cyan-950/40 p-4">
+                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-cyan-400">
+                                  AI Score
+                                </p>
+                                <p className="mt-2 text-3xl font-black tracking-[-0.05em] text-cyan-300">
+                                  {opportunity.matchPercentage != null ? `${opportunity.matchPercentage}%` : "—"}
+                                </p>
+                              </div>
                             </div>
-                            <div className="rounded-[20px] border border-cyan-500/20 bg-cyan-950/40 p-4">
-                              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-cyan-400">
-                                AI Score
-                              </p>
-                              <p className="mt-2 text-3xl font-black tracking-[-0.05em] text-cyan-300">
-                                {opportunity.matchPercentage != null ? `${opportunity.matchPercentage}%` : "—"}
-                              </p>
-                            </div>
-                          </div>
+                          )}
 
-                          {opportunity.matchReason && (
+                          {viewMode === 'recommended' && opportunity.matchReason && (
                             <div className="mt-4 rounded-[16px] border border-white/10 bg-white/5 px-4 py-3">
                               <p className="text-[10px] font-black uppercase tracking-[0.14em] text-cyan-400 mb-1">
                                 🤖 AI Insight
