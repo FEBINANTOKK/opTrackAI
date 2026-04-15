@@ -6,6 +6,7 @@ import opportunityRoutes from "./routes/opportunityRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import dataRoutes from "./routes/dataRoutes.js";
 import scraperRoutes from "./routes/scraperRoutes.js";
+import preferenceRoutes from "./routes/preferenceRoutes.js";
 
 const app: Express = express();
 
@@ -28,6 +29,7 @@ app.get("/health", (req: Request, res: Response) => {
 // Routes
 app.use(`${apiPrefix}/opportunities`, opportunityRoutes);
 app.use(`${apiPrefix}/users`, userRoutes);
+app.use(`${apiPrefix}/preferences`, preferenceRoutes);
 app.use(`${apiPrefix}/data`, dataRoutes);
 app.use(`${apiPrefix}/scraper`, scraperRoutes);
 
@@ -41,6 +43,7 @@ app.get("/", (req: Request, res: Response) => {
       opportunities: `${apiPrefix}/opportunities`,
       data: `${apiPrefix}/data`,
       scraper: `${apiPrefix}/scraper/run-all`,
+      preferences: `${apiPrefix}/preferences`,
       health: "/health",
     },
   });

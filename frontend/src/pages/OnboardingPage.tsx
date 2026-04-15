@@ -1,9 +1,10 @@
-﻿import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { FormField } from '../components/FormField'
 import { SkillsInput } from '../components/SkillsInput'
 import { Card } from '../components/ui/Card'
 import { useAuthStore } from '../store/useAuthStore'
+import { savePreferences } from '../lib/authApi'
 import type { OpportunityType, Preferences, Target, WorkMode } from '../types/auth'
 
 type OnboardingPageProps = {
@@ -24,6 +25,7 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
   const setPreferences = useAuthStore((state) => state.setPreferences)
   const isEditing = editing || Boolean(preferences)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState('')
   const [form, setForm] = useState<Preferences>(
     () =>
       preferences ?? {
@@ -39,12 +41,20 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
       },
   )
 
+  // Sync form with preferences if they change (e.g. loaded from API)
+  useEffect(() => {
+    if (preferences && !isSubmitting) {
+      setForm(preferences)
+    }
+  }, [preferences])
+
   const updateForm = <Key extends keyof Preferences>(key: Key, value: Preferences[Key]) => {
     setForm((current) => ({ ...current, [key]: value }))
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setError('')
 
     const finalizedPreferences: Preferences = {
       ...form,
@@ -55,23 +65,19 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
       skills: form.skills.map((skill) => skill.trim()).filter(Boolean),
     }
 
-    const payload = {
-      auth: {
-        token,
-        userId: user?.id,
-      },
-      preferences: finalizedPreferences,
-      submittedAt: new Date().toISOString(),
-    }
-
     setIsSubmitting(true)
 
-    setTimeout(() => {
+    try {
+      if (token && user?.id) {
+        await savePreferences(token, finalizedPreferences, user.id)
+      }
       setPreferences(finalizedPreferences)
-      console.log('Onboarding API payload:', payload)
-      setIsSubmitting(false)
       onComplete()
-    }, 1200)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save preferences.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const completedSections = [
@@ -82,11 +88,11 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
   ].filter(Boolean).length
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.16),_transparent_24%),radial-gradient(circle_at_bottom_right,_rgba(45,212,191,0.12),_transparent_28%),linear-gradient(180deg,_#e0f2fe_0%,_#f8fbff_34%,_#ffffff_100%)] text-slate-950">
+    <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.16),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(14,165,233,0.12),_transparent_32%),linear-gradient(180deg,_#e0f2fe_0%,_#eff6ff_24%,_#f8fafc_52%,_#ffffff_100%)] text-slate-950">
       <div className="relative">
-        <div className="absolute inset-x-0 top-0 h-[28rem] bg-[linear-gradient(135deg,_rgba(15,23,42,0.98)_0%,_rgba(30,41,59,0.96)_38%,_rgba(14,116,144,0.88)_100%)]" />
-        <div className="absolute left-[-6rem] top-10 h-72 w-72 rounded-full bg-cyan-300/20 blur-3xl" />
-        <div className="absolute right-[-8rem] top-24 h-80 w-80 rounded-full bg-emerald-300/18 blur-3xl" />
+        <div className="absolute inset-x-0 top-0 h-[38rem] bg-[linear-gradient(135deg,_rgba(15,23,42,0.98)_0%,_rgba(12,74,110,0.96)_42%,_rgba(8,145,178,0.88)_100%)]" />
+        <div className="absolute left-[-8rem] top-16 h-72 w-72 rounded-full bg-cyan-300/20 blur-3xl" />
+        <div className="absolute right-[-6rem] top-32 h-80 w-80 rounded-full bg-sky-300/20 blur-3xl" />
 
         <section className="relative px-4 pb-8 pt-5 sm:px-6 lg:px-8 lg:pb-10 lg:pt-6">
           <header className="rounded-[30px] border border-white/12 bg-white/8 p-5 text-white shadow-[0_30px_100px_-50px_rgba(15,23,42,0.95)] backdrop-blur md:p-7 lg:p-8">
@@ -149,7 +155,7 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
 
           <form className="mt-6 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]" onSubmit={handleSubmit}>
             <aside className="space-y-5">
-              <Card className="rounded-[28px] bg-white/90 shadow-[0_24px_80px_-48px_rgba(15,23,42,0.3)] backdrop-blur">
+              <Card className="rounded-[28px] border-slate-200/90 bg-[linear-gradient(180deg,_#ffffff_0%,_#fbfdff_100%)] shadow-[0_24px_80px_-48px_rgba(15,23,42,0.3)] backdrop-blur">
                 <p className="text-[11px] font-black uppercase tracking-[0.14em] text-cyan-700">Navigator</p>
                 <h2 className="mt-2 text-2xl font-black tracking-[-0.03em] text-slate-950">Profile blocks</h2>
                 <div className="mt-5 grid gap-3">
@@ -177,6 +183,12 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
             </aside>
 
             <div className="space-y-6">
+              {error && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-600">
+                  {error}
+                </div>
+              )}
+              
               <OnboardingSection
                 eyebrow="01. Identity"
                 helper="Tell us who you are so the recommendation engine knows what stage you are currently optimizing for."
@@ -348,7 +360,7 @@ function HeaderStat({ label, value }: { label: string; value: string }) {
 
 function SectionChip({ index, title, text }: { index: string; title: string; text: string }) {
   return (
-    <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4">
+    <div className="rounded-[20px] border border-slate-200 bg-white px-4 py-4">
       <p className="text-[11px] font-black uppercase tracking-[0.14em] text-cyan-700">{index}</p>
       <p className="mt-2 text-sm font-black text-slate-900">{title}</p>
       <p className="mt-1 text-sm leading-6 text-slate-600">{text}</p>
@@ -385,3 +397,4 @@ function OnboardingSection({
     </section>
   )
 }
+

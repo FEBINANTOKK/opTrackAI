@@ -25,43 +25,42 @@ function AppRoutes() {
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
 
-  const dashboardRoute = user ? (
-    <DashboardPage
-      onEditPreferences={() => navigate("/onboarding")}
-      onLogout={() => {
-        logout();
-        navigate("/login");
-      }}
-    />
-  ) : (
-    <Navigate replace to="/login" />
-  );
+  const isAuth = Boolean(user);
+  const hasPreferences = Boolean(preferences);
 
   return (
     <Routes>
       <Route
         element={
-          <LoginPage
-            onSignup={() => navigate("/signup")}
-            onSuccess={() => navigate("/dashboard")}
-          />
+          isAuth ? (
+            <Navigate replace to={hasPreferences ? "/dashboard" : "/onboarding"} />
+          ) : (
+            <LoginPage
+              onSignup={() => navigate("/signup")}
+              onSuccess={() => navigate("/onboarding")}
+            />
+          )
         }
         path="/login"
       />
       <Route
         element={
-          <SignupCleanPage
-            onLogin={() => navigate("/login")}
-            onSuccess={() => navigate("/onboarding")}
-          />
+          isAuth ? (
+            <Navigate replace to={hasPreferences ? "/dashboard" : "/onboarding"} />
+          ) : (
+            <SignupCleanPage
+              onLogin={() => navigate("/login")}
+              onSuccess={() => navigate("/onboarding")}
+            />
+          )
         }
         path="/signup"
       />
       <Route
         element={
-          user ? (
+          isAuth ? (
             <OnboardingPage
-              editing={Boolean(preferences)}
+              editing={hasPreferences}
               onBack={() => navigate("/dashboard")}
               onComplete={() => navigate("/dashboard")}
             />
@@ -71,12 +70,31 @@ function AppRoutes() {
         }
         path="/onboarding"
       />
-      <Route element={dashboardRoute} path="/dashboard" />
+      <Route
+        element={
+          isAuth ? (
+            hasPreferences ? (
+              <DashboardPage
+                onEditPreferences={() => navigate("/onboarding")}
+                onLogout={() => {
+                  logout();
+                  navigate("/login");
+                }}
+              />
+            ) : (
+              <Navigate replace to="/onboarding" />
+            )
+          ) : (
+            <Navigate replace to="/login" />
+          )
+        }
+        path="/dashboard"
+      />
       <Route
         element={
           <Navigate
             replace
-            to={user ? (preferences ? "/dashboard" : "/onboarding") : "/login"}
+            to={isAuth ? (hasPreferences ? "/dashboard" : "/onboarding") : "/login"}
           />
         }
         path="*"
