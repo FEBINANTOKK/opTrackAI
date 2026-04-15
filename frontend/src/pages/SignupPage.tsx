@@ -31,7 +31,7 @@ export function SignupPage({ onLogin, onSuccess }: SignupPageProps) {
         email: email.trim(),
         password,
       })
-      const user = await fetchCurrentUser(authResponse.token)
+      const user :any = await fetchCurrentUser(authResponse.token)
 
       setToken(authResponse.token)
       setUser(user, 'signup')
