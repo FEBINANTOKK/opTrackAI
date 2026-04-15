@@ -8,6 +8,7 @@ import userRoutes from "./routes/userRoutes.js";
 import dataRoutes from "./routes/dataRoutes.js";
 import scraperRoutes from "./routes/scraperRoutes.js";
 import preferenceRoutes from "./routes/preferenceRoutes.js";
+import chatRoutes from "./routes/chatRoutes.js";
 
 const app: Express = express();
 
@@ -34,6 +35,7 @@ app.use(`${apiPrefix}/users`, userRoutes);
 app.use(`${apiPrefix}/preferences`, preferenceRoutes);
 app.use(`${apiPrefix}/data`, dataRoutes);
 app.use(`${apiPrefix}/scraper`, scraperRoutes);
+app.use(`${apiPrefix}/chat`, chatRoutes);
 
 // Root endpoint
 app.get("/", (req: Request, res: Response) => {

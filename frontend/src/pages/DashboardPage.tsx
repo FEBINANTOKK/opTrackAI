@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { RefreshCw, Rocket, Globe, MapPin, Building2, Clock, Sparkles, Check, Bot } from "lucide-react";
 import { Badge } from "../components/ui/Badge";
 import { Card } from "../components/ui/Card";
 import { SkillChip } from "../components/ui/SkillChip";
@@ -7,6 +8,7 @@ import { useAuthStore } from "../store/useAuthStore";
 import type { OpportunityType } from "../types/auth";
 import { fetchRecommendations, fetchAllOpportunities } from "../services/recommendationService";
 import type { IOpportunity } from "../types/opportunity";
+import { ChatBot } from "../components/ChatBot";
 
 type Opportunity = {
   id: string;
@@ -91,6 +93,20 @@ export function DashboardPage({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const cachedRecommended = useRef<{ opps: IOpportunity[], hasMore: boolean } | null>(null);
+  const cachedExplore = useRef<Record<number, { opps: IOpportunity[], hasMore: boolean }>>({});
+  const lastRefreshTrigger = useRef<number>(0);
+
+  // Auto-refresh every 4 hours (14400000 ms)
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setRefreshTrigger(prev => prev + 1);
+    }, 14400000);
+    return () => clearInterval(intervalId);
+  }, []);
+
   // View mode
   const [viewMode, setViewMode] = useState<'recommended' | 'all'>('recommended');
 
@@ -123,14 +139,43 @@ export function DashboardPage({
     async function loadRecommendations() {
       if (!user?.id || !token) return;
       
+      const isForcedRefresh = refreshTrigger !== lastRefreshTrigger.current;
+      
+      // If a refresh was triggered manually or via 4-hour cycle, blast the cache
+      if (isForcedRefresh) {
+        cachedRecommended.current = null;
+        cachedExplore.current = {};
+        lastRefreshTrigger.current = refreshTrigger;
+      }
+
       try {
-        setIsLoading(true);
-        const response = viewMode === 'recommended' 
-          ? await fetchRecommendations(user.id, token)
-          : await fetchAllOpportunities(token, currentPage, 10);
-        
-        setBackendOpportunities(response.opportunities);
-        setHasMore(response.hasMore || false);
+        if (viewMode === 'recommended') {
+          // Serve from cache if available
+          if (cachedRecommended.current) {
+            setBackendOpportunities(cachedRecommended.current.opps);
+            setHasMore(cachedRecommended.current.hasMore);
+            return;
+          }
+          
+          setIsLoading(true);
+          const response = await fetchRecommendations(user.id, token);
+          cachedRecommended.current = { opps: response.opportunities, hasMore: response.hasMore || false };
+          setBackendOpportunities(response.opportunities);
+          setHasMore(response.hasMore || false);
+        } else {
+          // Serve paginated explore data from cache if available
+          if (cachedExplore.current[currentPage]) {
+            setBackendOpportunities(cachedExplore.current[currentPage].opps);
+            setHasMore(cachedExplore.current[currentPage].hasMore);
+            return;
+          }
+          
+          setIsLoading(true);
+          const response = await fetchAllOpportunities(token, currentPage, 10);
+          cachedExplore.current[currentPage] = { opps: response.opportunities, hasMore: response.hasMore || false };
+          setBackendOpportunities(response.opportunities);
+          setHasMore(response.hasMore || false);
+        }
         setError(null);
       } catch (err) {
         console.error("Failed to load recommendations:", err);
@@ -141,7 +186,7 @@ export function DashboardPage({
     }
 
     loadRecommendations();
-  }, [user?.id, token, viewMode, currentPage]);
+  }, [user?.id, token, viewMode, currentPage, refreshTrigger]);
 
   // Reset page when switching mode or filters
   useEffect(() => {
@@ -281,9 +326,6 @@ export function DashboardPage({
       opportunity.mode === (preferredModes[0] ?? "Remote")
         ? `Aligned with your ${opportunity.mode.toLowerCase()} work preference`
         : `${opportunity.mode} format gives you flexibility`,
-      opportunity.deadline === "Rolling"
-        ? "Rolling applications keep this option open"
-        : `Deadline window closes on ${opportunity.deadline}`,
     ];
   };
 
@@ -557,27 +599,37 @@ export function DashboardPage({
                   </h2>
                 </div>
                 
-                <div className="flex p-1.5 bg-slate-100 rounded-[20px] shadow-inner">
+                <div className="flex items-center gap-3">
                   <button
-                    onClick={() => setViewMode('recommended')}
-                    className={`px-5 py-2.5 rounded-[16px] text-xs font-black transition-all ${
+                    onClick={() => setRefreshTrigger(prev => prev + 1)}
+                    className="flex items-center gap-2 px-4 py-2 bg-white text-slate-700 text-xs font-black uppercase tracking-wider rounded-[16px] shadow-[0_2px_10px_-4px_rgba(0,0,0,0.1)] border border-slate-200 hover:bg-slate-50 transition-colors active:scale-95"
+                    title="Manual Refresh"
+                  >
+                    <RefreshCw className="h-4 w-4 text-black" />
+                    Refresh
+                  </button>
+                  <div className="flex p-1.5 bg-slate-100 rounded-[20px] shadow-inner">
+                    <button
+                      onClick={() => setViewMode('recommended')}
+                    className={`flex items-center justify-center px-4 py-2.5 rounded-[16px] text-xs font-black transition-all ${
                       viewMode === 'recommended'
                         ? "bg-white text-slate-900 shadow-sm"
                         : "text-slate-500 hover:text-slate-700"
                     }`}
                   >
-                    🚀 For You
+                    <Rocket className="h-4 w-4 mr-1.5 text-black" /> For You
                   </button>
                   <button
                     onClick={() => setViewMode('all')}
-                    className={`px-5 py-2.5 rounded-[16px] text-xs font-black transition-all ${
+                    className={`flex items-center justify-center px-4 py-2.5 rounded-[16px] text-xs font-black transition-all ${
                       viewMode === 'all'
                         ? "bg-white text-slate-900 shadow-sm"
                         : "text-slate-500 hover:text-slate-700"
                     }`}
                   >
-                    🌐 Explore
+                    <Globe className="h-4 w-4 mr-1.5 text-black" /> Explore
                   </button>
+                  </div>
                 </div>
               </div>
 
@@ -605,7 +657,7 @@ export function DashboardPage({
                 </div>
               </Card>
 
-              <div className="grid gap-5">
+              <div className="grid gap-4 grid-cols-1 max-w-[840px]">
                 {recommended.map((opportunity, index) => {
                   const matchingSkillCount = opportunity.skills.filter(
                     (skill) =>
@@ -616,72 +668,93 @@ export function DashboardPage({
                   ).length;
                   return (
                     <Card
-                      className="rounded-[28px] border-slate-200/90 bg-[linear-gradient(180deg,_#ffffff_0%,_#fbfdff_100%)] p-0 shadow-[0_24px_80px_-50px_rgba(15,23,42,0.26)] transition-all duration-300 hover:-translate-y-1 hover:border-cyan-200 hover:shadow-[0_28px_90px_-52px_rgba(14,165,233,0.38)]"
+                      className="rounded-[22px] border-slate-200/90 bg-[linear-gradient(180deg,_#ffffff_0%,_#fbfdff_100%)] p-0 shadow-[0_24px_80px_-50px_rgba(15,23,42,0.26)] transition-all duration-300 hover:-translate-y-1 hover:border-cyan-200 hover:shadow-[0_28px_90px_-52px_rgba(14,165,233,0.38)]"
                       key={opportunity.id}
                     >
-                      <article className="grid gap-6 p-5 xl:grid-cols-[minmax(0,1.2fr)_320px] xl:p-7">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge>{opportunity.type}</Badge>
-                            {viewMode === 'recommended' && (
-                              <>
-                                <Badge tone="green">
-                                  {opportunity.match}% match
-                                </Badge>
-                                {opportunity.matchPercentage != null && (
-                                  <Badge tone="blue">
-                                    🤖 AI: {opportunity.matchPercentage}%
-                                  </Badge>
-                                )}
-                                <Badge tone="blue">RANK {(currentPage - 1) * 10 + index + 1}</Badge>
-                              </>
-                            )}
-                          </div>
-
-                          <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                            <div className="max-w-3xl">
-                              <h2 className="text-3xl font-black tracking-[-0.04em] text-slate-950">
-                                {opportunity.title}
-                              </h2>
-                              <p className="mt-3 text-sm leading-7 text-slate-600">
-                                {opportunity.location} / {opportunity.mode} /
-                                Deadline {opportunity.deadline}
-                              </p>
+                      <article className="flex flex-col gap-3 p-4">
+                        {/* Header Row: 2-Column Layout */}
+                        <div className="flex flex-col lg:flex-row lg:items-start gap-3 xl:gap-6">
+                          {/* 1. Left Column: Main Info & Why This Fits */}
+                          <div className="flex-1 min-w-0 flex flex-col gap-3">
+                            <div>
+                              {/* Title Top Left */}
+                              <div className="flex items-start gap-3">
+                                <h2 className="text-[21px] leading-tight font-black tracking-[-0.04em] text-slate-950 line-clamp-2" title={opportunity.title}>
+                                  {opportunity.title}
+                                </h2>
+                                <div className="shrink-0 mt-0.5">
+                                  <Badge>{opportunity.type}</Badge>
+                                </div>
+                              </div>
+                              
+                              {/* Location Row directly below Title */}
+                              <div className="mt-2 inline-flex flex-wrap items-center gap-2 rounded-[10px] bg-sky-50 px-2.5 py-1.5 text-[11.5px] font-bold text-sky-900 border border-sky-100/60 shadow-sm">
+                                <div className="flex items-center gap-1.5">
+                                  <MapPin className="h-3.5 w-3.5 text-black" />
+                                  <span>{opportunity.location}</span>
+                                </div>
+                                <span className="text-sky-300/80 mx-0.5">•</span>
+                                <div className="flex items-center gap-1.5">
+                                  <Building2 className="h-3.5 w-3.5 text-black" />
+                                  <span>{opportunity.mode}</span>
+                                </div>
+                                <span className="text-sky-300/80 mx-0.5">•</span>
+                                <div className="flex items-center gap-1.5 text-rose-700">
+                                  <Clock className="h-3.5 w-3.5 text-black" />
+                                  <span>Deadline {opportunity.deadline}</span>
+                                </div>
+                              </div>
                             </div>
-                            <div className="rounded-[22px] border border-cyan-100 bg-cyan-50/70 px-4 py-3 text-left lg:min-w-56">
-                              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-cyan-700">
-                                Reward
-                              </p>
-                              <p className="mt-1 text-sm font-bold text-slate-800">
-                                {opportunity.reward}
-                              </p>
+                            
+                            {/* Why This Fits specifically placed below the title context */}
+                            <div className="rounded-[14px] border border-slate-200 bg-white p-2.5 shadow-sm inline-block self-start">
+                              <div className="flex items-center gap-1.5 mb-1.5 w-full">
+                                <Sparkles className="h-3.5 w-3.5 text-black" />
+                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+                                  Why This Fits
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {getReasons(opportunity).map((reason) => (
+                                  <div
+                                    className="flex items-center gap-1.5 rounded-[10px] bg-slate-50 px-2.5 py-1 transition-colors hover:bg-cyan-50/60 border border-slate-100"
+                                    key={reason}
+                                  >
+                                    <span className="flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full bg-cyan-100 text-cyan-700">
+                                      <Check className="h-2.5 w-2.5 text-black" strokeWidth={3} />
+                                    </span>
+                                    <span className="text-[11.5px] font-medium leading-tight text-slate-700">{reason}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Skills at Bottom of Left Column */}
+                            <div className="flex flex-wrap gap-1.5 mt-1">
+                              {opportunity.skills.map((skill) => (
+                                <SkillChip
+                                  active={preferredSkills.some(
+                                    (preferredSkill) =>
+                                      preferredSkill.toLowerCase() ===
+                                      skill.toLowerCase(),
+                                  )}
+                                  key={skill}
+                                  skill={skill}
+                                />
+                              ))}
                             </div>
                           </div>
 
-                          <div className="mt-5 flex flex-wrap gap-2">
-                            {opportunity.skills.map((skill) => (
-                              <SkillChip
-                                active={preferredSkills.some(
-                                  (preferredSkill) =>
-                                    preferredSkill.toLowerCase() ===
-                                    skill.toLowerCase(),
-                                )}
-                                key={skill}
-                                skill={skill}
-                              />
-                            ))}
-                          </div>
-
-                          <div className="mt-6 space-y-4">
-                            {/* Score Overview Strip */}
-                            {viewMode === 'recommended' && (
-                              <div className="rounded-[22px] border border-slate-200 bg-[linear-gradient(135deg,_#f8fafc_0%,_#ecfeff_50%,_#f0f9ff_100%)] p-5 shadow-sm">
-                                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                                <div className="flex items-center gap-5">
+                          {/* 2. Right Column: Action, Scores, & Badges physically locked to right bounds */}
+                          <div className="lg:w-44 shrink-0 flex flex-col gap-2.5 lg:self-stretch">
+                            {/* Circular Scores dynamically occupying the empty space */}
+                            {viewMode === 'recommended' ? (
+                              <div className="flex-1 flex flex-col items-center justify-center w-full py-2">
+                                <div className="flex justify-center gap-4 w-full">
                                   {/* Circular AI Score */}
                                   <div className="relative flex-shrink-0">
                                     <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
-                                      <circle cx="40" cy="40" r="32" stroke="#e2e8f0" strokeWidth="6" fill="none" />
+                                      <circle cx="40" cy="40" r="32" stroke="#e2e8f0" strokeWidth="8" fill="none" />
                                       <circle
                                         cx="40" cy="40" r="32"
                                         stroke={(() => {
@@ -690,7 +763,7 @@ export function DashboardPage({
                                           if (pct >= 40) return "#f59e0b";
                                           return "#ef4444";
                                         })()}
-                                        strokeWidth="6"
+                                        strokeWidth="8"
                                         fill="none"
                                         strokeLinecap="round"
                                         strokeDasharray={`${((opportunity.matchPercentage ?? 0) / 100) * 201} 201`}
@@ -698,15 +771,15 @@ export function DashboardPage({
                                       />
                                     </svg>
                                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                      <span className="text-lg font-black text-slate-900">{opportunity.matchPercentage ?? 0}%</span>
-                                      <span className="text-[8px] font-bold uppercase tracking-wider text-slate-400">AI</span>
+                                      <span className="text-[19px] font-black leading-none text-slate-900">{opportunity.matchPercentage ?? 0}%</span>
+                                      <span className="text-[10px] font-bold uppercase leading-tight tracking-wider text-slate-400">AI</span>
                                     </div>
                                   </div>
 
                                   {/* Circular Match Score */}
                                   <div className="relative flex-shrink-0">
                                     <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
-                                      <circle cx="40" cy="40" r="32" stroke="#e2e8f0" strokeWidth="6" fill="none" />
+                                      <circle cx="40" cy="40" r="32" stroke="#e2e8f0" strokeWidth="8" fill="none" />
                                       <circle
                                         cx="40" cy="40" r="32"
                                         stroke={(() => {
@@ -715,7 +788,7 @@ export function DashboardPage({
                                           if (pct >= 40) return "#f59e0b";
                                           return "#ef4444";
                                         })()}
-                                        strokeWidth="6"
+                                        strokeWidth="8"
                                         fill="none"
                                         strokeLinecap="round"
                                         strokeDasharray={`${(opportunity.match / 100) * 201} 201`}
@@ -723,159 +796,31 @@ export function DashboardPage({
                                       />
                                     </svg>
                                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                      <span className="text-lg font-black text-slate-900">{opportunity.match}%</span>
-                                      <span className="text-[8px] font-bold uppercase tracking-wider text-slate-400">Match</span>
+                                      <span className="text-[19px] font-black leading-none text-slate-900">{opportunity.match}%</span>
+                                      <span className="text-[10px] font-bold uppercase leading-tight tracking-wider text-slate-400">Match</span>
                                     </div>
                                   </div>
-
-                                  {/* Summary Text */}
-                                  <div className="min-w-0">
-                                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-cyan-700">
-                                      Compatibility
-                                    </p>
-                                    <p className="mt-1 text-sm leading-6 text-slate-600">
-                                      {opportunity.matchReason || (
-                                        matchingSkillCount > 0
-                                          ? `${matchingSkillCount} of ${opportunity.skills.length} skills overlap with your profile`
-                                          : "This role expands the profile you are building"
-                                      )}
-                                    </p>
-                                  </div>
                                 </div>
-
-                                {/* High Match Indicator */}
-                                {(opportunity.matchPercentage ?? 0) >= 60 && (
-                                  <div className="flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-200 px-4 py-2">
-                                    <span className="text-lg">🔥</span>
-                                    <span className="text-xs font-black uppercase tracking-wider text-emerald-700">High Match</span>
-                                  </div>
-                                )}
                               </div>
-                            </div>
+                            ) : (
+                              <div className="flex-1"></div>
                             )}
+                            
+                            {/* Apply Button */}
+                            <a
+                              className="inline-flex h-10 w-full items-center justify-center rounded-[14px] bg-[linear-gradient(135deg,_#06b6d4_0%,_#0ea5e9_100%)] px-3 text-[12.5px] font-black text-white shadow-md shadow-cyan-500/20 transition-all hover:bg-cyan-400 hover:shadow-lg hover:-translate-y-0.5 active:scale-95"
+                              href={opportunity.link}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              Apply Now →
+                            </a>
 
-                            {/* Why This Fits + Breakdown Grid */}
-                            <div className={`grid gap-4 ${viewMode === 'recommended' ? 'lg:grid-cols-2' : ''}`}>
-                              {/* Why This Fits */}
-                              <div className="rounded-[22px] border border-slate-200 bg-white p-5">
-                                <div className="flex items-center gap-2 mb-4">
-                                  <span className="text-base">✨</span>
-                                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
-                                    Why This Fits
-                                  </p>
-                                </div>
-                                <div className="space-y-2">
-                                  {getReasons(opportunity).map((reason) => (
-                                    <div
-                                      className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3 transition-colors hover:bg-cyan-50/60"
-                                      key={reason}
-                                    >
-                                      <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-cyan-100 text-[10px] text-cyan-700">✓</span>
-                                      <span className="text-sm font-medium leading-6 text-slate-700">{reason}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
 
-                              {/* Match Breakdown */}
-                              {viewMode === 'recommended' && (
-                                <div className="rounded-[22px] border border-slate-200 bg-white p-5">
-                                  <div className="flex items-center gap-2 mb-4">
-                                    <span className="text-base">📊</span>
-                                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
-                                      Match Breakdown
-                                    </p>
-                                  </div>
-                                  <div className="space-y-4">
-                                    <MetricBar
-                                      label="Skill overlap"
-                                      value={`${matchingSkillCount}/${opportunity.skills.length}`}
-                                      width={`${Math.max((matchingSkillCount / opportunity.skills.length) * 100, 16)}%`}
-                                    />
-                                    <MetricBar
-                                      label="Work style alignment"
-                                      value={opportunity.mode}
-                                      width={
-                                        preferredModes.includes(
-                                          opportunity.mode as
-                                            | "Remote"
-                                            | "Onsite"
-                                            | "Hybrid",
-                                        )
-                                          ? "100%"
-                                          : "62%"
-                                      }
-                                    />
-                                    {opportunity.matchPercentage != null && (
-                                      <MetricBar
-                                        label="AI Precision"
-                                        value={`${opportunity.matchPercentage}%`}
-                                        width={`${Math.max(opportunity.matchPercentage, 8)}%`}
-                                      />
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
                           </div>
-
                         </div>
 
-                        <div className="rounded-[26px] border border-slate-200 bg-slate-950 p-5 text-white shadow-[0_24px_80px_-42px_rgba(15,23,42,0.94)]">
-                          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-                            Next step
-                          </p>
-                          <p className="mt-2 text-2xl font-black tracking-[-0.03em] text-white">
-                            Move on this now
-                          </p>
-                          <p className="mt-3 text-sm leading-7 text-slate-200">
-                            Review the role details, tailor your resume or
-                            portfolio to the matching skills, then apply while
-                            this opportunity still feels timely.
-                          </p>
-
-                          {/* Dual-score display: Match % + AI Score */}
-                          {viewMode === 'recommended' && (
-                            <div className="mt-5 grid grid-cols-2 gap-3">
-                              <div className="rounded-[20px] border border-white/10 bg-white/6 p-4">
-                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
-                                  Match %
-                                </p>
-                                <p className="mt-2 text-3xl font-black tracking-[-0.05em] text-emerald-400">
-                                  {opportunity.match}%
-                                </p>
-                              </div>
-                              <div className="rounded-[20px] border border-cyan-500/20 bg-cyan-950/40 p-4">
-                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-cyan-400">
-                                  AI Score
-                                </p>
-                                <p className="mt-2 text-3xl font-black tracking-[-0.05em] text-cyan-300">
-                                  {opportunity.matchPercentage != null ? `${opportunity.matchPercentage}%` : "—"}
-                                </p>
-                              </div>
-                            </div>
-                          )}
-
-                          {viewMode === 'recommended' && opportunity.matchReason && (
-                            <div className="mt-4 rounded-[16px] border border-white/10 bg-white/5 px-4 py-3">
-                              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-cyan-400 mb-1">
-                                🤖 AI Insight
-                              </p>
-                              <p className="text-sm leading-6 text-slate-300">
-                                {opportunity.matchReason}
-                              </p>
-                            </div>
-                          )}
-
-                          <a
-                            className="mt-5 inline-flex h-12 w-full items-center justify-center rounded-2xl bg-cyan-400 px-4 text-sm font-black text-slate-950 transition hover:bg-cyan-300"
-                            href={opportunity.link}
-                            rel="noreferrer"
-                            target="_blank"
-                          >
-                            View opportunity
-                          </a>
-                        </div>
+                        {/* Action Row Handled in Header */}
                       </article>
                     </Card>
                   );
@@ -913,6 +858,7 @@ export function DashboardPage({
           </section>
         </section>
       </div>
+      <ChatBot opportunitiesContext={recommended} />
     </main>
   );
 }

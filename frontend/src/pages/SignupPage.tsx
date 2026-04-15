@@ -25,13 +25,13 @@ export function SignupPage({ onLogin, onSuccess }: SignupPageProps) {
     try {
       setIsSubmitting(true)
       setErrorMessage('')
-      
+
       const authResponse = await signup({
         username: username.trim(),
         email: email.trim(),
         password,
       })
-      const user :any = await fetchCurrentUser(authResponse.token)
+      const user: any = await fetchCurrentUser(authResponse.token)
 
       setToken(authResponse.token)
       setUser(user, 'signup')
