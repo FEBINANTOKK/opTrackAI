@@ -36,7 +36,7 @@ const oppurtunitySchema = new Schema<IOpportunity>(
     },
     type: {
       type: String,
-      enum: ["internship", "hackathon", "job"],
+      enum: ["internship", "hackathon", "job", "Internship"],
       required: true,
     },
     deadline: {

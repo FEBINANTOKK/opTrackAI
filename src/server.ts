@@ -1,7 +1,7 @@
 import "dotenv/config";
 import app from "./app.js";
 import connectDatabase from "./config/database.js";
-
+import { runInternshalaScraper } from "./services/scraper/internshalaScraper.js";
 const PORT = process.env.PORT || 5000;
 
 const startServer = async (): Promise<void> => {
@@ -23,3 +23,8 @@ const startServer = async (): Promise<void> => {
 };
 
 startServer();
+
+(async () => {
+  const result = await runInternshalaScraper();
+  console.log("SCRAPER RESULT:", result);
+})();
