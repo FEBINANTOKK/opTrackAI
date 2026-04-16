@@ -46,6 +46,7 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
   const isEditing = editing || Boolean(preferences)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [errors, setErrors] = useState<Partial<Record<keyof Preferences, string>>>({})
   const [form, setForm] = useState<Preferences>(() =>
     normalizePreferences(preferences) ?? {
       target: 'student',
@@ -68,6 +69,9 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
 
   const updateForm = <Key extends keyof Preferences>(key: Key, value: Preferences[Key]) => {
     setForm((current) => ({ ...current, [key]: value }))
+    if (errors[key]) {
+      setErrors((prev) => ({ ...prev, [key]: undefined }))
+    }
   }
 
   const toggleMultiValue = <
@@ -87,6 +91,9 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
         [key]: nextValues,
       }
     })
+    if (errors[key]) {
+      setErrors((prev) => ({ ...prev, [key]: undefined }))
+    }
   }
 
   const clearMultiField = (key: 'reward' | 'workMode' | 'timeCommitment' | 'opportunityType') => {
@@ -99,6 +106,27 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError('')
+    
+    // Comprehensive Validation
+    const newErrors: typeof errors = {}
+    if (form.reward.length === 0) newErrors.reward = 'Select at least one reward'
+    if (form.target === 'student') {
+      if (!form.college?.trim()) newErrors.college = 'College name is required'
+      if (!form.year?.trim()) newErrors.year = 'Graduation year is required'
+    }
+    if (!form.location.trim()) newErrors.location = 'Preferred location is required'
+    if (form.workMode.length === 0) newErrors.workMode = 'Select at least one work mode'
+    if (form.timeCommitment.length === 0) newErrors.timeCommitment = 'Select at least one commitment level'
+    if (form.opportunityType.length === 0) newErrors.opportunityType = 'Select at least one opportunity type'
+    if (form.skills.length === 0) newErrors.skills = 'Add at least one skill to personalize your feed'
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      // Scroll to top error or just show global message
+      setError('Please fix the highlighted fields before continuing.')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
 
     const finalizedPreferences: Preferences = {
       ...form,
@@ -204,7 +232,7 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
             </div>
           </header>
 
-          <form className="mt-6 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]" onSubmit={handleSubmit}>
+          <form className="mt-6 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]" onSubmit={handleSubmit} noValidate>
             <aside className="space-y-5">
               <Card className="rounded-[28px] border-slate-200/90 bg-[linear-gradient(180deg,_#ffffff_0%,_#fbfdff_100%)] shadow-[0_24px_80px_-48px_rgba(15,23,42,0.3)] backdrop-blur">
                 <p className="text-[11px] font-black uppercase tracking-[0.14em] text-cyan-700">Navigator</p>
@@ -237,7 +265,7 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
 
             <div className="space-y-6">
               {error && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-600">
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-600 animate-in fade-in slide-in-from-top-1">
                   {error}
                 </div>
               )}
@@ -261,6 +289,7 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
                     label="Rewards"
                     options={rewards}
                     selected={form.reward}
+                    error={errors.reward}
                     onToggle={(value) => toggleMultiValue('reward', value as RewardType)}
                     onClear={() => clearMultiField('reward')}
                   />
@@ -269,17 +298,17 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
                   <div className="mt-5 grid gap-5 lg:grid-cols-2">
                     <FormField
                       label="College"
+                      error={errors.college}
                       onChange={(event) => updateForm('college', event.target.value)}
                       placeholder="e.g. Massachusetts Institute"
-                      required
                       type="text"
                       value={form.college}
                     />
                     <FormField
                       label="Graduation year"
+                      error={errors.year}
                       onChange={(event) => updateForm('year', event.target.value)}
                       placeholder="2026"
-                      required
                       type="text"
                       value={form.year}
                     />
@@ -296,9 +325,9 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
                   <FormField
                     icon="pin"
                     label="Preferred location"
+                    error={errors.location}
                     onChange={(event) => updateForm('location', event.target.value)}
                     placeholder="City or country"
-                    required
                     type="text"
                     value={form.location}
                   />
@@ -308,6 +337,7 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
                     label="Work modes"
                     options={workModes}
                     selected={form.workMode}
+                    error={errors.workMode}
                     onToggle={(value) => toggleMultiValue('workMode', value as WorkMode)}
                     onClear={() => clearMultiField('workMode')}
                   />
@@ -324,6 +354,7 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
                     label="Time commitment"
                     options={timeCommitments}
                     selected={form.timeCommitment}
+                    error={errors.timeCommitment}
                     onToggle={(value) => toggleMultiValue('timeCommitment', value as TimeCommitment)}
                     onClear={() => clearMultiField('timeCommitment')}
                   />
@@ -331,6 +362,7 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
                     label="Opportunity type"
                     options={opportunityTypes}
                     selected={form.opportunityType}
+                    error={errors.opportunityType}
                     onToggle={(value) => toggleMultiValue('opportunityType', value as OpportunityType)}
                     onClear={() => clearMultiField('opportunityType')}
                   />
@@ -342,7 +374,12 @@ export function OnboardingPage({ onComplete, onBack, editing = false }: Onboardi
                 helper="Add skills one at a time so the dashboard can explain why each opportunity deserves its rank."
                 title="Skill matrix"
               >
-                <SkillsInput skills={form.skills} onChange={(skills) => updateForm('skills', skills)} />
+                <div className={`rounded-[28px] transition-all ${errors.skills ? 'ring-2 ring-red-500/50 p-2 bg-red-50/30' : ''}`}>
+                  <SkillsInput skills={form.skills} onChange={(skills) => updateForm('skills', skills)} />
+                  {errors.skills && (
+                    <p className="mt-2 text-[10px] font-bold text-red-500">{errors.skills}</p>
+                  )}
+                </div>
               </OnboardingSection>
 
               <Card className="rounded-[28px] border-cyan-100 bg-[linear-gradient(135deg,_rgba(236,254,255,0.98),_rgba(239,246,255,0.92))] shadow-[0_24px_80px_-48px_rgba(14,165,233,0.42)]">
@@ -407,17 +444,28 @@ function MultiSelectField({
   selected,
   onToggle,
   onClear,
+  error,
 }: {
   label: string
   options: string[]
   selected: string[]
   onToggle: (value: string) => void
   onClear: () => void
+  error?: string
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    <div className={`rounded-2xl border bg-slate-50 p-4 transition-all duration-300 ${
+      error ? 'border-red-500 ring-4 ring-red-500/10' : 'border-slate-200'
+    }`}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-black text-slate-900">{label}</p>
+        <div className="flex items-center gap-2">
+          <p className={`text-sm font-black ${error ? 'text-red-500' : 'text-slate-900'}`}>{label}</p>
+          {error && (
+            <span className="text-[10px] font-bold text-red-500 animate-in fade-in slide-in-from-left-1">
+              — {error}
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={onClear}
@@ -445,7 +493,7 @@ function MultiSelectField({
                 onChange={() => onToggle(option)}
                 className="h-4 w-4 accent-[#1257d6]"
               />
-              <span>{option}</span>
+              <span className="capitalize">{option.replace('_', ' ')}</span>
             </label>
           )
         })}
@@ -458,7 +506,7 @@ function MultiSelectField({
             onClick={() => onToggle(item)}
             className="rounded-full border border-blue-100 bg-white px-3 py-1 text-xs font-black text-[#1257d6] transition hover:border-blue-200 hover:bg-blue-50"
           >
-            {item} ×
+            {item.replace('_', ' ')} ×
           </button>
         ))}
       </div>
@@ -497,4 +545,3 @@ function OnboardingSection({
     </section>
   )
 }
-

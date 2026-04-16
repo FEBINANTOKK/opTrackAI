@@ -66,15 +66,38 @@ export function SignupCleanPage({ onLogin, onSuccess }: SignupCleanPageProps) {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<{ username?: string; email?: string; password?: string }>({});
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    const newErrors: typeof errors = {};
+    if (!username.trim()) newErrors.username = "Username is required";
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim()) {
+      newErrors.email = "Email is required";
+    } else if (!emailRegex.test(email.trim())) {
+      newErrors.email = "Invalid email address";
+    }
+
+    if (!password) {
+      newErrors.password = "Password is required";
+    } else if (password.length < 6) {
+      newErrors.password = "Must be at least 6 characters";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setErrorMessage("");
+      setErrors({});
 
       const authResponse = await signup({
         username: username.trim(),
@@ -106,32 +129,40 @@ export function SignupCleanPage({ onLogin, onSuccess }: SignupCleanPageProps) {
       title="Start your journey"
       subtitle="Discover opportunities tailored for you."
     >
-      <form className="space-y-5" onSubmit={handleSubmit}>
+      <form className="space-y-5" onSubmit={handleSubmit} noValidate>
         <FormField
           icon="user"
           label="Username"
-          onChange={(event) => setUsername(event.target.value)}
+          error={errors.username}
+          onChange={(event) => {
+            setUsername(event.target.value);
+            if (errors.username) setErrors(prev => ({ ...prev, username: undefined }));
+          }}
           placeholder="alex"
-          required
           type="text"
           value={username}
         />
         <FormField
           icon="mail"
           label="Email"
-          onChange={(event) => setEmail(event.target.value)}
+          error={errors.email}
+          onChange={(event) => {
+            setEmail(event.target.value);
+            if (errors.email) setErrors(prev => ({ ...prev, email: undefined }));
+          }}
           placeholder="alex@example.com"
-          required
           type="email"
           value={email}
         />
         <FormField
           icon="lock"
           label="Password"
-          minLength={6}
-          onChange={(event) => setPassword(event.target.value)}
+          error={errors.password}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            if (errors.password) setErrors(prev => ({ ...prev, password: undefined }));
+          }}
           placeholder="At least 6 characters"
-          required
           type="password"
           value={password}
         />

@@ -747,64 +747,7 @@ export function DashboardPage({
 
                           {/* 2. Right Column: Action, Scores, & Badges physically locked to right bounds */}
                           <div className="lg:w-44 shrink-0 flex flex-col gap-2.5 lg:self-stretch">
-                            {/* Circular Scores dynamically occupying the empty space */}
-                            {viewMode === 'recommended' ? (
-                              <div className="flex-1 flex flex-col items-center justify-center w-full py-2">
-                                <div className="flex justify-center gap-4 w-full">
-                                  {/* Circular AI Score */}
-                                  <div className="relative flex-shrink-0">
-                                    <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
-                                      <circle cx="40" cy="40" r="32" stroke="#e2e8f0" strokeWidth="8" fill="none" />
-                                      <circle
-                                        cx="40" cy="40" r="32"
-                                        stroke={(() => {
-                                          const pct = opportunity.matchPercentage ?? 0;
-                                          if (pct >= 70) return "#06b6d4";
-                                          if (pct >= 40) return "#f59e0b";
-                                          return "#ef4444";
-                                        })()}
-                                        strokeWidth="8"
-                                        fill="none"
-                                        strokeLinecap="round"
-                                        strokeDasharray={`${((opportunity.matchPercentage ?? 0) / 100) * 201} 201`}
-                                        className="transition-all duration-700"
-                                      />
-                                    </svg>
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                      <span className="text-[19px] font-black leading-none text-slate-900">{opportunity.matchPercentage ?? 0}%</span>
-                                      <span className="text-[10px] font-bold uppercase leading-tight tracking-wider text-slate-400">AI</span>
-                                    </div>
-                                  </div>
-
-                                  {/* Circular Match Score */}
-                                  <div className="relative flex-shrink-0">
-                                    <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
-                                      <circle cx="40" cy="40" r="32" stroke="#e2e8f0" strokeWidth="8" fill="none" />
-                                      <circle
-                                        cx="40" cy="40" r="32"
-                                        stroke={(() => {
-                                          const pct = opportunity.match;
-                                          if (pct >= 70) return "#10b981";
-                                          if (pct >= 40) return "#f59e0b";
-                                          return "#ef4444";
-                                        })()}
-                                        strokeWidth="8"
-                                        fill="none"
-                                        strokeLinecap="round"
-                                        strokeDasharray={`${(opportunity.match / 100) * 201} 201`}
-                                        className="transition-all duration-700"
-                                      />
-                                    </svg>
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                      <span className="text-[19px] font-black leading-none text-slate-900">{opportunity.match}%</span>
-                                      <span className="text-[10px] font-bold uppercase leading-tight tracking-wider text-slate-400">Match</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex-1"></div>
-                            )}
+                            <div className="flex-1"></div>
                             
                             {/* Apply Button */}
                             <a

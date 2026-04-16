@@ -3,6 +3,7 @@ import type { InputHTMLAttributes, SelectHTMLAttributes } from 'react'
 type BaseFieldProps = {
   label: string
   hint?: string
+  error?: string
   icon?: 'user' | 'mail' | 'lock' | 'pin'
 }
 
@@ -20,28 +21,41 @@ type SelectFieldProps = BaseFieldProps &
 type FormFieldProps = InputFieldProps | SelectFieldProps
 
 export function FormField(props: FormFieldProps) {
-  const { label, hint } = props
+  const { label, hint, error } = props
 
   return (
     <label className="group block">
-      <span className="text-[11px] font-black uppercase tracking-[0.08em] text-slate-500 transition group-focus-within:text-blue-600">
-        {label}
-      </span>
+      <div className="flex items-center justify-between gap-3">
+        <span className={`text-[11px] font-black uppercase tracking-[0.08em] transition ${
+          error ? 'text-red-500' : 'text-slate-500 group-focus-within:text-blue-600'
+        }`}>
+          {label}
+        </span>
+        {error ? (
+          <span className="text-[10px] font-bold text-red-500 animate-in fade-in slide-in-from-right-1">
+            {error}
+          </span>
+        ) : null}
+      </div>
       {props.as === 'select' ? (
         <SelectField {...props} />
       ) : (
         <InputField {...props} />
       )}
-      {hint ? <span className="mt-1 block text-xs text-slate-500">{hint}</span> : null}
+      {hint && !error ? <span className="mt-1 block text-xs text-slate-500">{hint}</span> : null}
     </label>
   )
 }
 
-function SelectField({ label: _label, hint: _hint, icon: _icon, options, as: _as, ...selectProps }: SelectFieldProps) {
+function SelectField({ label: _label, hint: _hint, error, icon: _icon, options, as: _as, ...selectProps }: SelectFieldProps) {
   return (
     <select
       {...selectProps}
-      className="mt-2 h-11 w-full rounded-xl border border-transparent bg-slate-100 px-3 text-sm font-semibold text-slate-800 outline-none transition-all duration-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+      className={`mt-2 h-11 w-full rounded-xl border bg-slate-100 px-3 text-sm font-semibold text-slate-800 outline-none transition-all duration-300 ${
+        error
+          ? 'border-red-500 bg-white ring-4 ring-red-500/10'
+          : 'border-transparent focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10'
+      }`}
     >
       {options.map((option) => (
         <option key={option} value={option}>
@@ -52,13 +66,17 @@ function SelectField({ label: _label, hint: _hint, icon: _icon, options, as: _as
   )
 }
 
-function InputField({ label: _label, hint: _hint, icon, as: _as, ...inputProps }: InputFieldProps) {
+function InputField({ label: _label, hint: _hint, error, icon, as: _as, ...inputProps }: InputFieldProps) {
   return (
     <div className="relative mt-2">
-      {icon ? <FieldIcon icon={icon} /> : null}
+      {icon ? <FieldIcon error={!!error} icon={icon} /> : null}
       <input
         {...inputProps}
-        className={`h-11 w-full rounded-xl border border-transparent bg-slate-100 text-sm font-semibold text-slate-800 outline-none transition-all duration-300 placeholder:font-medium placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 ${
+        className={`h-11 w-full rounded-xl border text-sm font-semibold text-slate-800 outline-none transition-all duration-300 placeholder:font-medium placeholder:text-slate-400 ${
+          error
+            ? 'border-red-500 bg-white ring-4 ring-red-500/10'
+            : 'border-transparent bg-slate-100 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10'
+        } ${
           icon ? 'pl-10 pr-3' : 'px-3'
         }`}
       />
@@ -66,9 +84,11 @@ function InputField({ label: _label, hint: _hint, icon, as: _as, ...inputProps }
   )
 }
 
-function FieldIcon({ icon }: { icon: NonNullable<BaseFieldProps['icon']> }) {
+function FieldIcon({ icon, error }: { icon: NonNullable<BaseFieldProps['icon']>, error?: boolean }) {
   return (
-    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+    <span className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${
+      error ? 'text-red-500' : 'text-slate-400'
+    }`}>
       <svg
         aria-hidden="true"
         className="h-4 w-4"

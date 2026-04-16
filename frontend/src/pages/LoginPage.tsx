@@ -15,15 +15,30 @@ export function LoginPage({ onSignup, onSuccess }: LoginPageProps) {
   const setToken = useAuthStore((state) => state.setToken)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [errors, setErrors] = useState<{ username?: string; password?: string }>({})
   const [errorMessage, setErrorMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
+    const newErrors: typeof errors = {}
+    if (!username.trim()) newErrors.username = 'Username is required'
+    if (!password) {
+      newErrors.password = 'Password is required'
+    } else if (password.length < 6) {
+      newErrors.password = 'Must be at least 6 characters'
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+
     try {
       setIsSubmitting(true)
       setErrorMessage('')
+      setErrors({})
 
       const authResponse = await login({ username: username.trim(), password })
       const { user, preference } = await fetchCurrentUser(authResponse.token)
@@ -46,22 +61,28 @@ export function LoginPage({ onSignup, onSuccess }: LoginPageProps) {
       title="Start your journey"
       subtitle="Discover opportunities tailored for you."
     >
-      <form className="space-y-5" onSubmit={handleSubmit}>
+      <form className="space-y-5" onSubmit={handleSubmit} noValidate>
         <FormField
           icon="user"
           label="Username"
-          onChange={(event) => setUsername(event.target.value)}
+          error={errors.username}
+          onChange={(event) => {
+            setUsername(event.target.value)
+            if (errors.username) setErrors(prev => ({ ...prev, username: undefined }))
+          }}
           placeholder="alex"
-          required
           type="text"
           value={username}
         />
         <FormField
           icon="lock"
           label="Password"
-          onChange={(event) => setPassword(event.target.value)}
+          error={errors.password}
+          onChange={(event) => {
+            setPassword(event.target.value)
+            if (errors.password) setErrors(prev => ({ ...prev, password: undefined }))
+          }}
           placeholder="At least 6 characters"
-          required
           type="password"
           value={password}
         />
